@@ -8,7 +8,6 @@ load_dotenv()
 
 MODEL_API_URI = os.getenv("MODEL_API_URI")
 
-# Define the router
 router = APIRouter()
 
 location_data = {}

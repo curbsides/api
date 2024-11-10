@@ -12,7 +12,6 @@ AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY")
 AWS_SECRET_KEY = os.getenv("AWS_SECRET_KEY")
 S3_REGION = os.getenv("S3_REGION")
 
-# Define the router
 router = APIRouter()
 
 s3_client = boto3.client(
