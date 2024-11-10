@@ -45,7 +45,7 @@ async def get_nearest_locations(latitude: float, longitude: float):
                     break
 
         if len(nearest_locations) < 5:
-            raise HTTPException(status_code=404, detail="Not enough valid locations found with parking.")
+            return {"nearest_locations": []}
 
         return {"nearest_locations": nearest_locations}
 
