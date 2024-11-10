@@ -1,6 +1,12 @@
 from fastapi import APIRouter, HTTPException
 from geopy.distance import geodesic
 import json
+import httpx
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
+MODEL_API_URI = os.getenv("MODEL_API_URI")
 
 # Define the router
 router = APIRouter()
@@ -20,15 +26,28 @@ async def get_nearest_locations(latitude: float, longitude: float):
             (location_id, geodesic(user_location, loc).miles, loc)
             for location_id, loc in locations.items()
         ]
-        nearest = sorted(distances, key=lambda x: x[1])[:5]
+        sorted_locations = sorted(distances, key=lambda x: x[1])
 
-        # check if location has parking by making query to model API
-        # retry until have min number of images
+        nearest_locations = []
+        async with httpx.AsyncClient() as client:
+            for location in sorted_locations:
+                location_id, distance, coords = location
+                # Make request to the model API
+                response = await client.get(f"{MODEL_API_URI}{location_id}")
+                if response.status_code == 200 and response.json().get("result") is True:
+                    nearest_locations.append({
+                        "id": location_id,
+                        "distance": distance,
+                        "latitude": coords[0],
+                        "longitude": coords[1]
+                    })
+                
+                if len(nearest_locations) == 5:
+                    break
 
-        nearest_locations = [
-            {"id": loc[0], "distance": loc[1], "latitude": loc[2][0], "longitude": loc[2][1]}
-            for loc in nearest
-        ]
+        if len(nearest_locations) < 5:
+            raise HTTPException(status_code=404, detail="Not enough valid locations found with parking.")
+
         return {"nearest_locations": nearest_locations}
 
     except Exception as e:
