@@ -1,24 +1,43 @@
 import os
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse
+from botocore.exceptions import NoCredentialsError, ClientError
+import boto3
+from dotenv import load_dotenv
+
+load_dotenv()
+
+S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
+AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY")
+AWS_SECRET_KEY = os.getenv("AWS_SECRET_KEY")
+S3_REGION = os.getenv("S3_REGION")
 
 # Define the router
 router = APIRouter()
 
-# Define the relative path to the images folder
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-IMAGES_FOLDER = os.path.join(BASE_DIR, "images")
+s3_client = boto3.client(
+    "s3",
+    region_name=S3_REGION,
+    aws_access_key_id=AWS_ACCESS_KEY,
+    aws_secret_access_key=AWS_SECRET_KEY,
+)
 
 @router.get("/{filename}")
 async def serve_image(filename: str):
-    # Construct the full path to the file
+    try:
+        s3_object = s3_client.get_object(Bucket=S3_BUCKET_NAME, Key=f'images/{filename}')
+        file_stream = s3_object["Body"]
+        
+        return StreamingResponse(
+            file_stream,
+            media_type="application/octet-stream",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
 
-    # fetch file from S3
-    file_path = os.path.join(IMAGES_FOLDER, filename)
-
-    # Check if the file exists
-    if not os.path.isfile(file_path):
-        raise HTTPException(status_code=404, detail="File not found")
-
-    # Return the file as a response
-    return FileResponse(file_path)
+    except NoCredentialsError:
+        raise HTTPException(status_code=403, detail="AWS credentials not found")
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'NoSuchKey':
+            raise HTTPException(status_code=404, detail="File not found in S3")
+        else:
+            raise HTTPException(status_code=500, detail="Error fetching file from S3")
